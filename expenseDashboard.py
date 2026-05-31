@@ -15,6 +15,12 @@ try:
     budget_df.columns = budget_df.columns.str.strip()
     expenses_df.columns = expenses_df.columns.str.strip()
 
+    # --- THE FIX: Clean numbers and force them to match as floats ---
+    # Convert to string to safely remove commas/symbols, then convert to float
+    budget_df['Budget (₹)'] = budget_df['Budget (₹)'].astype(str).str.replace(r'[₹,]', '', regex=True).astype(float)
+    expenses_df['Amount'] = expenses_df['Amount'].astype(str).str.replace(r'[₹,]', '', regex=True).astype(float)
+    # ----------------------------------------------------------------
+
     # --- Calculations ---
     # Calculate actual spend directly from the Daily Expenses log for accuracy
     total_budget = budget_df['Budget (₹)'].sum()
