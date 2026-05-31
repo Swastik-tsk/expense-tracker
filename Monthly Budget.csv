@@ -1,11 +1,7 @@
-Category,Budget (₹),Actual (₹),Difference (₹)
-Rent,7000,,
-Food & Groceries,4000,,
-Transport,1000,,
-Mobile/Internet,500,,
-Utilities,500,,
-Education,1000,,
-Entertainment/Dates,1000,,
-Emergency Fund,2000,,
-Savings/Investment,2000,,
-Buffer,1000,,
+Category,Budget (₹)
+Food,5000
+Transport,2000
+Bills,4000
+Entertainment,1000
+Shopping,3000
+Savings,5000
