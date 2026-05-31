@@ -9,7 +9,7 @@ st.title("📊 Monthly Budget Dashboard")
 try:
     # Read directly from the repo's file system! No tokens or URLs needed.
     budget_df = pd.read_csv("Monthly Budget.csv")
-    expenses_df = pd.read_csv("Daily Expenses.csv")
+    expenses_df = pd.read_csv("Daily Expense.csv")
         
     # Clean column names just in case of trailing spaces
     budget_df.columns = budget_df.columns.str.strip()
