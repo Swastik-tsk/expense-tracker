@@ -26,7 +26,7 @@ EXPENSE_REQUIRED_COLUMNS = ["Date", "Category", "Amount", "Need/Want", "Descript
 
 
 # =========================
-# Mobile Styling
+# Mobile-Friendly Styling
 # =========================
 
 st.markdown(
@@ -80,16 +80,21 @@ def clean_amount(series):
         series.astype(str)
         .str.replace(r"[₹,]", "", regex=True)
         .str.strip()
-        .replace({"": "0", "nan": "0", "None": "0"})
+        .replace({
+            "": "0",
+            "nan": "0",
+            "None": "0",
+            "NaN": "0"
+        })
         .astype(float)
     )
 
 
 def validate_columns(df, required_columns, file_name):
-    missing = [col for col in required_columns if col not in df.columns]
+    missing_columns = [col for col in required_columns if col not in df.columns]
 
-    if missing:
-        st.error(f"Missing columns in {file_name}: {', '.join(missing)}")
+    if missing_columns:
+        st.error(f"Missing columns in {file_name}: {', '.join(missing_columns)}")
         st.stop()
 
 
@@ -125,11 +130,12 @@ def save_edited_expenses(edited_df):
     ).dt.strftime("%Y-%m-%d")
 
     cleaned_df["Amount"] = clean_amount(cleaned_df["Amount"])
-    cleaned_df["Category"] = cleaned_df["Category"].astype(str).str.strip()
-    cleaned_df["Need/Want"] = cleaned_df["Need/Want"].astype(str).str.strip()
+    cleaned_df["Category"] = cleaned_df["Category"].fillna("").astype(str).str.strip()
+    cleaned_df["Need/Want"] = cleaned_df["Need/Want"].fillna("").astype(str).str.strip()
     cleaned_df["Description"] = cleaned_df["Description"].fillna("").astype(str).str.strip()
 
     cleaned_df = cleaned_df.dropna(subset=["Date"])
+    cleaned_df = cleaned_df[cleaned_df["Date"] != "NaT"]
     cleaned_df = cleaned_df[cleaned_df["Category"] != ""]
     cleaned_df = cleaned_df[cleaned_df["Amount"] > 0]
 
@@ -151,20 +157,30 @@ try:
     validate_columns(expenses_df, EXPENSE_REQUIRED_COLUMNS, EXPENSE_FILE)
 
     # =========================
-    # Clean Data
+    # Clean Budget Data
     # =========================
 
     budget_df["Category"] = budget_df["Category"].astype(str).str.strip()
     budget_df["Budget (₹)"] = clean_amount(budget_df["Budget (₹)"])
 
+    # =========================
+    # Clean Expense Data
+    # =========================
+
     expenses_df = expenses_df.reindex(columns=EXPENSE_REQUIRED_COLUMNS)
 
-    if not expenses_df.empty:
+    if expenses_df.empty:
+        expenses_df = pd.DataFrame(columns=EXPENSE_REQUIRED_COLUMNS)
         expenses_df["Date"] = pd.to_datetime(expenses_df["Date"], errors="coerce")
-        expenses_df["Category"] = expenses_df["Category"].astype(str).str.strip()
+        expenses_df["Amount"] = pd.Series(dtype=float)
+    else:
+        expenses_df["Date"] = pd.to_datetime(expenses_df["Date"], errors="coerce")
+        expenses_df["Category"] = expenses_df["Category"].fillna("").astype(str).str.strip()
         expenses_df["Amount"] = clean_amount(expenses_df["Amount"])
-        expenses_df["Need/Want"] = expenses_df["Need/Want"].astype(str).str.strip()
+        expenses_df["Need/Want"] = expenses_df["Need/Want"].fillna("").astype(str).str.strip()
         expenses_df["Description"] = expenses_df["Description"].fillna("").astype(str).str.strip()
+
+    categories = sorted(budget_df["Category"].dropna().unique().tolist())
 
     # =========================
     # Calculations
@@ -173,10 +189,15 @@ try:
     total_budget = budget_df["Budget (₹)"].sum()
     total_spent = expenses_df["Amount"].sum() if not expenses_df.empty else 0
     remaining = total_budget - total_spent
-    budget_used_pct = (total_spent / total_budget * 100) if total_budget > 0 else 0
+
+    budget_used_pct = (
+        total_spent / total_budget * 100
+        if total_budget > 0
+        else 0
+    )
 
     # =========================
-    # Top-Level Metrics
+    # Financial Overview
     # =========================
 
     st.header("Financial Overview")
@@ -205,70 +226,73 @@ try:
     )
 
     # =========================
-    # Add Expense Tab
+    # Add Expense
     # =========================
 
     with tab1:
         st.subheader("Add Daily Expense")
 
-        categories = sorted(budget_df["Category"].dropna().unique().tolist())
+        if not categories:
+            st.warning("No categories found in Monthly Budget.csv.")
+        else:
+            with st.form("add_expense_form", clear_on_submit=True):
+                expense_date = st.date_input("Date", value=date.today())
 
-        with st.form("add_expense_form", clear_on_submit=True):
-            expense_date = st.date_input("Date", value=date.today())
+                category = st.selectbox(
+                    "Category",
+                    categories
+                )
 
-            category = st.selectbox(
-                "Category",
-                categories
-            )
+                amount = st.number_input(
+                    "Amount",
+                    min_value=0.0,
+                    step=10.0,
+                    format="%.2f"
+                )
 
-            amount = st.number_input(
-                "Amount",
-                min_value=0.0,
-                step=10.0,
-                format="%.2f"
-            )
+                need_want = st.selectbox(
+                    "Need/Want",
+                    ["Need", "Want"]
+                )
 
-            need_want = st.selectbox(
-                "Need/Want",
-                ["Need", "Want"]
-            )
+                description = st.text_input(
+                    "Description",
+                    placeholder="Example: Lunch, petrol, mobile recharge"
+                )
 
-            description = st.text_input(
-                "Description",
-                placeholder="Example: Lunch, petrol, mobile recharge"
-            )
+                submitted = st.form_submit_button(
+                    "Add Expense",
+                    use_container_width=True
+                )
 
-            submitted = st.form_submit_button(
-                "Add Expense",
-                use_container_width=True
-            )
+                if submitted:
+                    if amount <= 0:
+                        st.error("Amount must be greater than 0.")
+                    else:
+                        new_expense = {
+                            "Date": expense_date.strftime("%Y-%m-%d"),
+                            "Category": category,
+                            "Amount": amount,
+                            "Need/Want": need_want,
+                            "Description": description.strip()
+                        }
 
-            if submitted:
-                if amount <= 0:
-                    st.error("Amount must be greater than 0.")
-                else:
-                    new_expense = {
-                        "Date": expense_date.strftime("%Y-%m-%d"),
-                        "Category": category,
-                        "Amount": amount,
-                        "Need/Want": need_want,
-                        "Description": description.strip()
-                    }
+                        append_expense(new_expense)
 
-                    append_expense(new_expense)
-
-                    st.success("Expense added successfully.")
-                    st.rerun()
+                        st.success("Expense added successfully.")
+                        st.rerun()
 
     # =========================
-    # Budget vs Actual Tab
+    # Budget vs Actual
     # =========================
 
     with tab2:
         st.subheader("Category Breakdown")
 
         if expenses_df.empty:
-            actuals_by_cat = pd.DataFrame(columns=["Category", "Calculated Actual (₹)"])
+            actuals_by_cat = pd.DataFrame(
+                columns=["Category", "Calculated Actual (₹)"]
+            )
         else:
             actuals_by_cat = (
                 expenses_df.groupby("Category", as_index=False)["Amount"]
@@ -281,6 +305,18 @@ try:
             actuals_by_cat,
             on="Category",
             how="left"
+        ).fillna(0)
+
+        # Important Plotly fix:
+        # Force both chart columns to numeric before plotting.
+        merged_df["Budget (₹)"] = pd.to_numeric(
+            merged_df["Budget (₹)"],
+            errors="coerce"
+        ).fillna(0)
+
+        merged_df["Calculated Actual (₹)"] = pd.to_numeric(
+            merged_df["Calculated Actual (₹)"],
+            errors="coerce"
         ).fillna(0)
 
         merged_df["Difference (₹)"] = (
@@ -300,15 +336,23 @@ try:
             lambda value: "Over Budget" if value < 0 else "Within Budget"
         )
 
+        chart_df = merged_df.melt(
+            id_vars="Category",
+            value_vars=["Budget (₹)", "Calculated Actual (₹)"],
+            var_name="Metric",
+            value_name="Amount"
+        )
+
         fig = px.bar(
-            merged_df,
+            chart_df,
             x="Category",
-            y=["Budget (₹)", "Calculated Actual (₹)"],
+            y="Amount",
+            color="Metric",
             barmode="group",
             title="Budget vs Actual Spending per Category",
             labels={
-                "value": "Amount (₹)",
-                "variable": "Metric"
+                "Amount": "Amount (₹)",
+                "Category": "Category"
             }
         )
 
@@ -347,13 +391,13 @@ try:
             )
 
     # =========================
-    # Daily Log & Analysis Tab
+    # Daily Log & Analysis
     # =========================
 
     with tab3:
         st.subheader("Needs vs Wants")
 
-        if "Need/Want" in expenses_df.columns and not expenses_df.empty:
+        if not expenses_df.empty:
             need_want_summary = (
                 expenses_df.groupby("Need/Want", as_index=False)["Amount"]
                 .sum()
@@ -384,16 +428,17 @@ try:
         st.subheader("Daily Spending Trend")
 
         if not expenses_df.empty:
-            daily_summary = (
-                expenses_df.dropna(subset=["Date"])
-                .groupby(expenses_df["Date"].dt.date)["Amount"]
-                .sum()
-                .reset_index()
-            )
+            trend_df = expenses_df.dropna(subset=["Date"]).copy()
 
-            daily_summary.columns = ["Date", "Amount"]
+            if not trend_df.empty:
+                trend_df["Date Only"] = trend_df["Date"].dt.date
 
-            if not daily_summary.empty:
+                daily_summary = (
+                    trend_df.groupby("Date Only", as_index=False)["Amount"]
+                    .sum()
+                    .rename(columns={"Date Only": "Date"})
+                )
+
                 fig_line = px.line(
                     daily_summary,
                     x="Date",
@@ -462,6 +507,7 @@ try:
             with col2:
                 if st.button("↩️ Reload", use_container_width=True):
                     st.rerun()
+
 
 except FileNotFoundError as e:
     st.error("Error: CSV files not found.")
