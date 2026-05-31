@@ -6,16 +6,11 @@ import plotly.express as px
 st.set_page_config(page_title="Monthly Budget Dashboard", layout="wide", page_icon="📊")
 st.title("📊 Monthly Budget Dashboard")
 
-# Sidebar for file uploads
-st.sidebar.header("Upload Data")
-budget_file = st.sidebar.file_uploader("Upload 'Monthly Budget.csv'", type=["csv"])
-expenses_file = st.sidebar.file_uploader("Upload 'Daily Expenses.csv'", type=["csv"])
-
-if budget_file and expenses_file:
-    # Read the CSVs
-    budget_df = pd.read_csv(budget_file)
-    expenses_df = pd.read_csv(expenses_file)
-
+try:
+    # Read directly from the repo's file system! No tokens or URLs needed.
+    budget_df = pd.read_csv("Monthly Budget.csv")
+    expenses_df = pd.read_csv("Daily Expenses.csv")
+        
     # Clean column names just in case of trailing spaces
     budget_df.columns = budget_df.columns.str.strip()
     expenses_df.columns = expenses_df.columns.str.strip()
@@ -73,19 +68,27 @@ if budget_file and expenses_file:
             st.subheader("Needs vs Wants")
             if 'Need/Want' in expenses_df.columns:
                 need_want_summary = expenses_df.groupby('Need/Want')['Amount'].sum().reset_index()
-                fig_pie = px.pie(
-                    need_want_summary, 
-                    values='Amount', 
-                    names='Need/Want',
-                    hole=0.4,
-                    color='Need/Want',
-                    color_discrete_map={'Need': '#2ca02c', 'Want': '#d62728'}
-                )
-                st.plotly_chart(fig_pie, use_container_width=True)
+                
+                # Check if there is data to plot to avoid errors on empty files
+                if not need_want_summary.empty and need_want_summary['Amount'].sum() > 0:
+                    fig_pie = px.pie(
+                        need_want_summary, 
+                        values='Amount', 
+                        names='Need/Want',
+                        hole=0.4,
+                        color='Need/Want',
+                        color_discrete_map={'Need': '#2ca02c', 'Want': '#d62728'}
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("No Needs/Wants logged yet.")
         
         with col_right:
             st.subheader("Daily Expense Log")
             st.dataframe(expenses_df, use_container_width=True, hide_index=True)
 
-else:
-    st.info("👈 Please upload your **Monthly Budget.csv** and **Daily Expenses.csv** files in the sidebar to generate the dashboard.")
+except FileNotFoundError:
+    st.error("Error: CSV files not found!")
+    st.info("Make sure 'Monthly Budget.csv' and 'Daily Expenses.csv' are uploaded to your GitHub repository in the exact same folder as this script.")
+except Exception as e:
+    st.error(f"An unexpected error occurred: {e}")
